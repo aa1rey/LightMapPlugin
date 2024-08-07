@@ -15,7 +15,7 @@ class LIGHTMAPBAKER_API ULightMapBakeUtility : public UActorActionUtility
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent) void BakeLightMap(int32 MinLightMapResolution);
-	void BakeLightMap_Implementation(int32 MinLightMapResolution);
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent) void BakeLightMap(int32 LightMapRes);
+	void BakeLightMap_Implementation(int32 LightMapRes);
 	
 };
