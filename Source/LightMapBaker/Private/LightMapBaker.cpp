@@ -54,6 +54,7 @@ void FLightMapBakerModule::PluginButtonClicked()
 			FText::FromString(EditorWorld->GetName())
 		);
 		FMessageDialog::Open(EAppMsgType::Ok, DialogText);
+		FMessageDialog::Debugf(DialogText);
 	}
 
 	

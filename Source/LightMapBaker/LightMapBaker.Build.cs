@@ -44,6 +44,7 @@ public class LightMapBaker : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+                "Blutility",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
