@@ -5,78 +5,99 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/ObjectLibrary.h"
-//#include "GeometryScript/MeshUVFunctions.h"
-//#include "GeometryScript/MeshAssetFunctions.h"
+#include "Layers/LayersSubsystem.h"
+#include "GeometryScript/MeshUVFunctions.h"
+#include "GeometryScript/MeshAssetFunctions.h"
 #include "EditorFramework/AssetImportData.h"
+#include "KismetProceduralMeshLibrary.h"
+#include "ProceduralMeshComponent.h"
+#include "EditorUtilityLibrary.h"
 
-void ULightMapBakeUtility::BakeLightMap_Implementation(int32 LightMapRes)
+void ULightMapBakeUtility::SetLightMapDensity(UStaticMesh* Mesh, float Density)
 {
-	// Get Editor World
-	UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
-	if (!EditorWorld) return;
+	Mesh->SetLightmapUVDensity(Density);
+}
 
-	// Get all static mesh actors in world
-	TArray<AActor*> EditorActors;
-	UGameplayStatics::GetAllActorsOfClass(EditorWorld, AStaticMeshActor::StaticClass(), EditorActors);
-	if (EditorActors.IsEmpty()) return;
+TArray<AActor*> ULightMapBakeUtility::GetSelectedActors()
+{
+	return UEditorUtilityLibrary::GetSelectionSet();
+}
 
-	//auto ObjectLibrary = UObjectLibrary::CreateLibrary(UStaticMesh::StaticClass(), false, false);
-	//if (!ObjectLibrary) return;
-	//TArray<FAssetData> AssetDatas;
+void ULightMapBakeUtility::SetMinLightMapRes(int32 Resolution)
+{
+	TArray<AActor*> OutActors = UEditorUtilityLibrary::GetSelectionSet();
+	if (OutActors.Num() == 0) return;
 
-	int32 MinLightMapRes;
 	// Find the nearest PowerOfTwo number for the Min LightMap Resolution
-	{
-		int32 PowerOfTwo = 2;
-		while ( !(LightMapRes >= PowerOfTwo && LightMapRes <= PowerOfTwo * 2) )
-			PowerOfTwo *= 2;
+	int32 MinLightMapRes = GetMinLightMapResolutionFromCurrent(Resolution);
 
-		MinLightMapRes = LightMapRes - PowerOfTwo < PowerOfTwo * 2 - LightMapRes ? PowerOfTwo : PowerOfTwo * 2;
-	}
-
-	// Iterate through found meshes and setting them properties
-	for (AActor* actor : EditorActors)
+	// Iterate through selected actors with static mesh component
+	for (auto actor : OutActors)
 	{
-		if (UStaticMeshComponent* sm_component = actor->GetComponentByClass<UStaticMeshComponent>())
+		if (UStaticMesh* LocalMesh = actor->GetComponentByClass<UStaticMeshComponent>()->GetStaticMesh().Get())
 		{
-			UStaticMesh* MeshAsset = sm_component->GetStaticMesh().Get();
-			MeshAsset->SetLightMapResolution(LightMapRes);
+			LocalMesh->bAllowCPUAccess = true;
+			LocalMesh->GetSourceModel(0).BuildSettings.bGenerateLightmapUVs = true;
+			LocalMesh->GetSourceModel(0).BuildSettings.MinLightmapResolution = MinLightMapRes;
+			LocalMesh->SetLightMapResolution(Resolution);
 
-			GEngine->AddOnScreenDebugMessage(INDEX_NONE, 60.f, FColor::Red, *FString::Printf(
-				TEXT("Asset: %s | Density: %f | Resolution: %i"),
-				*MeshAsset->GetName(),
-				MeshAsset->GetLightmapUVDensity(),
-				LightMapRes));
+			double MeshArea = GetStaticMeshMeshArea(LocalMesh);
 
-			/*EGeometryScriptOutcomePins Pins;
-			FGeometryScriptMeshReadLOD RequestedLOD;
-			FGeometryScriptCopyMeshFromAssetOptions Options;
-			UDynamicMesh* NewDynamicMesh = UGeometryScriptLibrary_StaticMeshFunctions::CopyMeshFromStaticMesh(MeshAsset, {}, {}, {}, Pins);
-			
-			if (NewDynamicMesh)
-			{
-				double MeshArea, UVArea;
-				FBox MeshBounds;
-				FBox2D UVBounds;
-				bool bIsValidUVSet, bUVUnset;
+			LocalMesh->SetLightmapUVDensity(MeshArea / pow(Resolution, 2) / 0.2f/* / UVArea*/);
 
-				UGeometryScriptLibrary_MeshUVFunctions::GetMeshUVSizeInfo(
-					NewDynamicMesh,
-					0,
-					{},
-					MeshArea,
-					UVArea,
-					MeshBounds,
-					UVBounds,
-					bIsValidUVSet,
-					bUVUnset);
+			UE_LOG(LogTemp, Warning, TEXT("LM Res: 'i' | LM Density: 'f' | Mesh Area: 'i'"),
+				Resolution,
+				LocalMesh->GetLightmapUVDensity(),
+				MeshArea);
 
-				MeshAsset->SetLightmapUVDensity(MeshArea / pow(LightMapRes, 2) / UVArea);
 
-				GEngine->AddOnScreenDebugMessage(INDEX_NONE, 60.f, FColor::Orange, *FString::Printf(
-					TEXT("Density: %f"), MeshAsset->GetLightmapUVDensity()
-				));
-			}*/
 		}
 	}
+
+	//UGeometryScriptLibrary_MeshUVFunctions::GetMeshUVSizeInfo(DynamicMeshComponent->GetDynamicMesh(), 0, {}, MeshArea, UVArea, MeshBounds, UVBounds, bIsValidUVSet, bUVUnset);
+
+}
+
+double ULightMapBakeUtility::GetStaticMeshMeshArea(UStaticMesh* Mesh)
+{
+	if (!Mesh) return 0.f;
+
+	TArray<FVector> Vertices;
+	TArray<int32> Triangles;
+	TArray<FVector> Normals;
+	TArray<FVector2D> UVs;
+	TArray<FProcMeshTangent> Tangents;
+	UKismetProceduralMeshLibrary::GetSectionFromStaticMesh(Mesh, 0, 0, Vertices, Triangles, Normals, UVs, Tangents);
+
+	// Calculate MeshArea that is a sum of all triangles area
+	double MeshArea = 0;
+	int32 TrianglesNum = Triangles.Num() / 3;
+	for (int32 TrianglesIdx = 0; TrianglesIdx < TrianglesNum; TrianglesIdx += 3)
+	{
+		const int32 Indice1 = Triangles[TrianglesIdx];
+		const int32 Indice2 = Triangles[TrianglesIdx + 1];
+		const int32 Indice3 = Triangles[TrianglesIdx + 2];
+
+		const FVector A = Vertices[Indice1];
+		const FVector B = Vertices[Indice2];
+		const FVector C = Vertices[Indice3];
+
+		const FVector AB = FVector(B.X - A.X, B.Y - A.Y, B.Z - A.Z);
+		const FVector BC = FVector(C.X - B.X, C.Y - B.Y, C.Z - B.Z);
+		const FVector AC = FVector(C.X - A.X, C.Y - A.Y, C.Z - A.Z);
+
+		const double p = (AB.Length() + BC.Length() + AC.Length()) / 2.f;
+		MeshArea += sqrt(p * (p - AB.Length()) * (p - BC.Length()) * (p - AC.Length()));
+	}
+
+	return MeshArea;
+}
+
+int32 ULightMapBakeUtility::GetMinLightMapResolutionFromCurrent(int32 CurrentResolution)
+{
+	int32 PowerOfTwo = 2;
+	while (!(CurrentResolution >= PowerOfTwo && CurrentResolution <= PowerOfTwo * 2))
+		PowerOfTwo *= 2;
+
+	return (CurrentResolution - PowerOfTwo < PowerOfTwo * 2 - CurrentResolution ? PowerOfTwo : PowerOfTwo * 2) / 2;
 }

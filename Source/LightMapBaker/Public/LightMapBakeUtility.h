@@ -15,7 +15,9 @@ class LIGHTMAPBAKER_API ULightMapBakeUtility : public UActorActionUtility
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent) void BakeLightMap(int32 LightMapRes);
-	void BakeLightMap_Implementation(int32 LightMapRes);
-	
+	UFUNCTION(BlueprintCallable) void SetLightMapDensity(UStaticMesh* Mesh, float Density);
+	UFUNCTION(BlueprintCallable, BlueprintPure) TArray<AActor*> GetSelectedActors();
+	UFUNCTION(BlueprintCallable) void SetMinLightMapRes(int32 Resolution);
+	double GetStaticMeshMeshArea(UStaticMesh* Mesh);
+	int32 GetMinLightMapResolutionFromCurrent(int32 CurrentResolution);
 };
