@@ -32,7 +32,7 @@ void ULightMapBakeUtility::SetLightMapDensity(float Density)
 			// Calculate Scaled Mesh Area
 			double MeshArea = GetStaticMeshArea(LocalMesh, LocalStaticMeshComponent->GetComponentScale());
 
-			LocalMesh->SetLightmapUVDensity(Density);
+			//LocalMesh->SetLightmapUVDensity(Density);
 
 			// Calculate Ideal LightMap Resolution by given Density
 			int32 Resolution = FMath::Clamp(sqrt(MeshArea * Density), 4, 4096);
@@ -41,7 +41,8 @@ void ULightMapBakeUtility::SetLightMapDensity(float Density)
 			//Resolution = Resolution > 4 ? FMath::Clamp(Resolution - (Resolution % 4), 4, 4096) : 4;
 
 			LocalMesh->GetSourceModel(0).BuildSettings.MinLightmapResolution = GetMinLightMapResolutionFromCurrent(Resolution);
-			LocalMesh->SetLightMapResolution(Resolution);
+			LocalStaticMeshComponent->bOverrideLightMapRes = true;
+			LocalStaticMeshComponent->OverriddenLightMapRes = Resolution;
 
 			// Save changes
 			LocalMesh->Build();
@@ -50,7 +51,7 @@ void ULightMapBakeUtility::SetLightMapDensity(float Density)
 			UE_LOG(LogTemp, Display, TEXT("Object Name: %s | LM Res: %i | LM Density: %f | Mesh Area: %f"),
 				*LocalMesh->GetName(),
 				Resolution,
-				LocalMesh->GetLightmapUVDensity(),
+				Density,
 				MeshArea);
 		}
 	}
