@@ -21,38 +21,39 @@ void ULightMapBakeUtility::SetLightMapDensity(float Density)
 
 		if (UStaticMesh* LocalMesh = LocalStaticMeshComponent->GetStaticMesh().Get())
 		{
-
-
-			LocalMesh->bAllowCPUAccess = true;
-			LocalMesh->GetSourceModel(0).BuildSettings.bGenerateLightmapUVs = 1;
-
 			// Calculate UVs Area
-			double UVsArea = GetStaticMeshArea(LocalMesh);
+			double MeshArea_x1 = GetStaticMeshArea(LocalMesh);
 
 			// Calculate Scaled Mesh Area
-			double MeshArea = GetStaticMeshArea(LocalMesh, LocalStaticMeshComponent->GetComponentScale());
+			double MeshArea_Scaled = GetStaticMeshArea(LocalMesh, LocalStaticMeshComponent->GetComponentScale());
 
-			//LocalMesh->SetLightmapUVDensity(Density);
+			// Calculate Ideal LightMap Resolution by given Density without Scale
+			int32 Resolution_x1 = FMath::Clamp(sqrt(MeshArea_x1 * Density), 4, 4096);
 
-			// Calculate Ideal LightMap Resolution by given Density
-			int32 Resolution = FMath::Clamp(sqrt(MeshArea * Density), 4, 4096);
+			// Calculate Ideal LightMap Resolution by given Density with Scale
+			int32 Resolution_Scaled = FMath::Clamp(sqrt(MeshArea_Scaled * Density), 4, 4096);
 
 			// The Resolution must be the multiply of 4 (dxt block size)
 			//Resolution = Resolution > 4 ? FMath::Clamp(Resolution - (Resolution % 4), 4, 4096) : 4;
 
-			LocalMesh->GetSourceModel(0).BuildSettings.MinLightmapResolution = GetMinLightMapResolutionFromCurrent(Resolution);
-			LocalStaticMeshComponent->bOverrideLightMapRes = true;
-			LocalStaticMeshComponent->OverriddenLightMapRes = Resolution;
+			// Set StaticMesh asset lightmap parameters without scale
+			LocalMesh->SetLightmapUVDensity(Density);
+			LocalMesh->GetSourceModel(0).BuildSettings.bGenerateLightmapUVs = 1;
+			LocalMesh->GetSourceModel(0).BuildSettings.MinLightmapResolution = GetMinLightMapResolutionFromCurrent(Resolution_x1);
+			LocalMesh->SetLightMapResolution(Resolution_x1);
 
 			// Save changes
 			LocalMesh->Build();
 			LocalMesh->MarkPackageDirty();
 
-			UE_LOG(LogTemp, Display, TEXT("Object Name: %s | LM Res: %i | LM Density: %f | Mesh Area: %f"),
-				*LocalMesh->GetName(),
-				Resolution,
-				Density,
-				MeshArea);
+			// Set StaticMeshComponent lightmap parameters with scale
+			LocalStaticMeshComponent->bOverrideLightMapRes = true;
+			LocalStaticMeshComponent->OverriddenLightMapRes = Resolution_Scaled;
+
+			UE_LOG(LogTemp, Display,
+				TEXT("Object Name: %s | LM Res Scaled: %i | LM Density: %f | Mesh Area Scaled: %f"),
+				*LocalMesh->GetName(), Resolution_Scaled, Density, MeshArea_Scaled
+			);
 		}
 	}
 }
