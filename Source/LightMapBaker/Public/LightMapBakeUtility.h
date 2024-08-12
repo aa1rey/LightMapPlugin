@@ -15,7 +15,11 @@ class LIGHTMAPBAKER_API ULightMapBakeUtility : public UActorActionUtility
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, CallInEditor) void SetLightMapDensity(float Density);
+	UPROPERTY(EditAnywhere) bool bEnableLMD = true;
+	UFUNCTION(BlueprintCallable, CallInEditor) void SetLightMapDensity(
+		UPARAM(DisplayName = "Light Map Density (0-2)", meta = (editcondition="bEnableLMD") ) float LightMapDensity = 0.8,
+		int32 MinLightMapRes = 512,
+		int32 LightMapCoordinateIndex = 1);
 	UFUNCTION(BlueprintCallable, BlueprintPure) TArray<AActor*> GetSelectedActors();
 
 	// Returns area of all triangles of a mesh (with scale)
@@ -26,7 +30,4 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	UWorld* GetWorld() const;
-
-	UFUNCTION(BlueprintPure, Category = "Corridor", meta = (Keywords = "corridor vertex mesh meshdata", NativeBreakFunc))
-	TArray<FVector> MeshData(const UStaticMeshComponent* StaticMeshComponent);
 };

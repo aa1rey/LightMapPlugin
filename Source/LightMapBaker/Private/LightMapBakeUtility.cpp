@@ -7,9 +7,9 @@
 #include "EditorUtilityLibrary.h"
 #include "Components/StaticMeshComponent.h"
 
-void ULightMapBakeUtility::SetLightMapDensity(float Density)
+void ULightMapBakeUtility::SetLightMapDensity(float LightMapDensity, int32 MinLightMapRes, int32 LightMapCoordinateIndex)
 {
-	if (Density <= 0) return;
+	if (LightMapDensity <= 0) return;
 	TArray<AActor*> OutActors = UEditorUtilityLibrary::GetSelectionSet();
 	if (OutActors.Num() == 0) return;
 
@@ -28,23 +28,23 @@ void ULightMapBakeUtility::SetLightMapDensity(float Density)
 			double MeshArea_Scaled = GetStaticMeshArea(LocalMesh, LocalStaticMeshComponent->GetComponentScale());
 
 			// Calculate Ideal LightMap Resolution by given Density without Scale
-			int32 Resolution_x1 = FMath::Clamp(sqrt(MeshArea_x1 * Density), 4, 4096);
+			int32 Resolution_x1 = FMath::Clamp(sqrt(MeshArea_x1) * LightMapDensity, 4, 4096);
 
 			// Calculate Ideal LightMap Resolution by given Density with Scale
-			int32 Resolution_Scaled = FMath::Clamp(sqrt(MeshArea_Scaled * Density), 4, 4096);
+			int32 Resolution_Scaled = FMath::Clamp(sqrt(MeshArea_Scaled) * LightMapDensity, 4, 4096);
 
 			// The Resolution must be the multiply of 4 (dxt block size)
 			//Resolution = Resolution > 4 ? FMath::Clamp(Resolution - (Resolution % 4), 4, 4096) : 4;
 
 			// Set StaticMesh asset lightmap parameters without scale
-			LocalMesh->SetLightmapUVDensity(Density);
 			LocalMesh->GetSourceModel(0).BuildSettings.bGenerateLightmapUVs = 1;
-			LocalMesh->GetSourceModel(0).BuildSettings.MinLightmapResolution = GetMinLightMapResolutionFromCurrent(Resolution_x1);
+			if (LightMapCoordinateIndex >= 0) LocalMesh->SetLightMapCoordinateIndex(LightMapCoordinateIndex);
+			LocalMesh->GetSourceModel(0).BuildSettings.MinLightmapResolution = MinLightMapRes != 0 ? MinLightMapRes : GetMinLightMapResolutionFromCurrent(Resolution_x1);
+			LocalMesh->SetLightmapUVDensity(LightMapDensity);
 			LocalMesh->SetLightMapResolution(Resolution_x1);
 
-			// Save changes
-			LocalMesh->Build();
 			LocalMesh->MarkPackageDirty();
+			LocalMesh->Build();
 
 			// Set StaticMeshComponent lightmap parameters with scale
 			LocalStaticMeshComponent->bOverrideLightMapRes = true;
@@ -52,7 +52,7 @@ void ULightMapBakeUtility::SetLightMapDensity(float Density)
 
 			UE_LOG(LogTemp, Display,
 				TEXT("Object Name: %s | LM Res Scaled: %i | LM Density: %f | Mesh Area Scaled: %f"),
-				*LocalMesh->GetName(), Resolution_Scaled, Density, MeshArea_Scaled
+				*LocalMesh->GetName(), Resolution_Scaled, LightMapDensity, MeshArea_Scaled
 			);
 		}
 	}
@@ -125,40 +125,10 @@ int32 ULightMapBakeUtility::GetMinLightMapResolutionFromCurrent(int32 CurrentRes
 	while (!(CurrentResolution >= PowerOfTwo && CurrentResolution <= PowerOfTwo * 2))
 		PowerOfTwo *= 2;
 
-	return (CurrentResolution - PowerOfTwo < PowerOfTwo * 2 - CurrentResolution ? PowerOfTwo : PowerOfTwo * 2) / 2;
+	return (CurrentResolution - PowerOfTwo < PowerOfTwo * 2 - CurrentResolution ? PowerOfTwo : PowerOfTwo * 2);
 }
 
 UWorld* ULightMapBakeUtility::GetWorld() const
 {
 	return GEditor->GetEditorWorldContext().World();
-}
-
-TArray<FVector> ULightMapBakeUtility::MeshData(const UStaticMeshComponent* StaticMeshComponent)
-{
-	TArray<FVector> vertices = TArray<FVector>();
-
-	// Vertex Buffer
-	if (!IsValidLowLevel()) return vertices;
-	if (!StaticMeshComponent) return vertices;
-	if (!StaticMeshComponent->GetStaticMesh()) return vertices;
-	if (!StaticMeshComponent->GetStaticMesh()->GetRenderData()) return vertices;
-
-	if (StaticMeshComponent->GetStaticMesh()->GetRenderData()->LODResources.IsValidIndex(0))
-	{
-		FPositionVertexBuffer* VertexBuffer = &StaticMeshComponent->GetStaticMesh()->GetRenderData()->LODResources[0].VertexBuffers.PositionVertexBuffer;
-		if (VertexBuffer)
-		{
-			const int32 VertexCount = VertexBuffer->GetNumVertices();
-			for (int32 Index = 0; Index < VertexCount; Index++)
-			{
-				//This is in the Static Mesh Actor Class, so it is location and tranform of the SMActor
-				FVector3f VertexPos = VertexBuffer->VertexPosition(Index);
-				const FVector WorldSpaceVertexLocation = StaticMeshComponent->GetComponentLocation() + StaticMeshComponent->GetComponentTransform().TransformVector(FVector(VertexPos.X, VertexPos.Y, VertexPos.Z));
-				//add to output FVector array
-				vertices.Add(WorldSpaceVertexLocation);
-			}
-		}
-	}
-
-	return vertices;
 }
