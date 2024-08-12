@@ -46,8 +46,6 @@ public class LightMapBaker : ModuleRules
 				"SlateCore",
                 "Blutility",
                 "ProceduralMeshComponent",
-                "GeometryScriptingCore",
-                "StaticMeshEditor",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
